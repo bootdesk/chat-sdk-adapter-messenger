@@ -132,6 +132,9 @@ Facebook sends webhook events to your endpoint. Verify requests using HMAC signa
 
 Facebook Messenger Platform. Supports quick replies, persistent menu, and get started button. Rich templates available via `MessengerTemplate` (button, generic, media, receipt, product, coupon, customer feedback).
 
+## Documentationn
+Full API documentation: https://bootdesk.github.io/chat-sdk
+
 ## License
 
 MIT

@@ -12,12 +12,12 @@ Requires a PSR-18 HTTP client (`guzzlehttp/guzzle`, `symfony/http-client`, etc.)
 
 ## Configuration
 
-| Variable | Description | Example |
-|----------|-------------|---------|
-| `page_access_token` | Facebook Page Access Token | `EAAx...` |
-| `http_client` | PSR-18 HTTP client instance | `new GuzzleHttp\Client` |
-| `app_secret` | Facebook App Secret | `abc123...` |
-| `verify_token` | Webhook Verify Token | `my-verify-token` |
+| Variable            | Description                 | Example                 |
+| ------------------- | --------------------------- | ----------------------- |
+| `page_access_token` | Facebook Page Access Token  | `EAAx...`               |
+| `http_client`       | PSR-18 HTTP client instance | `new GuzzleHttp\Client` |
+| `app_secret`        | Facebook App Secret         | `abc123...`             |
+| `verify_token`      | Webhook Verify Token        | `my-verify-token`       |
 
 ```php
 use BootDesk\ChatSDK\Messenger\MessengerAdapter;
@@ -90,22 +90,22 @@ $adapter->postMessage('messenger:1234567890', PostableMessage::template(
 
 ### All Template Types
 
-| Method | Template Type |
-|--------|---------------|
-| `buttonTemplate(string $text, array $buttons)` | Button — text with up to 3 buttons |
-| `genericTemplate(array $elements)` | Generic — cards with title, subtitle, image, buttons |
-| `mediaTemplate(string $url, string $mediaType, ?array $button)` | Media — image/video with optional button |
-| `receiptTemplate(recipientName, orderNumber, currency, ...)` | Receipt — order confirmation |
-| `productTemplate(string $productId)` | Product — catalog product card |
-| `couponTemplate(title, code, ...)` | Coupon — promotional offer |
-| `customerFeedbackTemplate(title, businessAddress, ratingOptions, ...)` | Customer Feedback — native survey |
+| Method                                                                 | Template Type                                        |
+| ---------------------------------------------------------------------- | ---------------------------------------------------- |
+| `buttonTemplate(string $text, array $buttons)`                         | Button — text with up to 3 buttons                   |
+| `genericTemplate(array $elements)`                                     | Generic — cards with title, subtitle, image, buttons |
+| `mediaTemplate(string $url, string $mediaType, ?array $button)`        | Media — image/video with optional button             |
+| `receiptTemplate(recipientName, orderNumber, currency, ...)`           | Receipt — order confirmation                         |
+| `productTemplate(string $productId)`                                   | Product — catalog product card                       |
+| `couponTemplate(title, code, ...)`                                     | Coupon — promotional offer                           |
+| `customerFeedbackTemplate(title, businessAddress, ratingOptions, ...)` | Customer Feedback — native survey                    |
 
 Cards from the SDK `Card` class (title, sections, images, buttons) are automatically rendered as **button** or **generic** templates.
 
 ## Thread ID Format
 
-| Format | Description |
-|--------|-------------|
+| Format                 | Description           |
+| ---------------------- | --------------------- |
 | `messenger:{senderId}` | One thread per sender |
 
 ## Webhook
@@ -114,25 +114,27 @@ Facebook sends webhook events to your endpoint. Verify requests using HMAC signa
 
 ## Feature Matrix
 
-| Feature | Supported |
-|---------|-----------|
-| Post messages | ✓ |
-| Edit messages | ✗ |
-| Delete messages | ✓ |
-| Reactions | ✓ |
-| Typing indicator | ✓ |
-| Fetch messages | ✗ |
-| Fetch thread info | ✗ |
-| Fetch channel info | ✗ |
-| Get user | ✗ |
-| Open DM | ✗ |
-| Stream | ✓ |
+| Feature            | Supported |
+| ------------------ | --------- |
+| Post messages      | ✓         |
+| Edit messages      | ✗         |
+| Delete messages    | ✓         |
+| Reactions          | ✓         |
+| Slash commands     | ✓         |
+| Typing indicator   | ✓         |
+| Fetch messages     | ✗         |
+| Fetch thread info  | ✗         |
+| Fetch channel info | ✗         |
+| Get user           | ✗         |
+| Open DM            | ✗         |
+| Stream             | ✓         |
 
 ## Notes
 
 Facebook Messenger Platform. Supports quick replies, persistent menu, and get started button. Rich templates available via `MessengerTemplate` (button, generic, media, receipt, product, coupon, customer feedback).
 
 ## Documentationn
+
 Full API documentation: https://bootdesk.github.io/chat-sdk
 
 ## License

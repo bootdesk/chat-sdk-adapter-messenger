@@ -1,0 +1,410 @@
+{
+  "botName": "Messenger Test Bot",
+  "pageId": "100000000000001",
+  "firstMessage": {
+    "object": "page",
+    "entry": [
+      {
+        "id": "100000000000001",
+        "time": 1772998024000,
+        "messaging": [
+          {
+            "sender": { "id": "200000000000001" },
+            "recipient": { "id": "100000000000001" },
+            "timestamp": 1772998024000,
+            "message": {
+              "mid": "m_FAKE_MSG_ID_001",
+              "text": "What is BootDesk?"
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "secondMessage": {
+    "object": "page",
+    "entry": [
+      {
+        "id": "100000000000001",
+        "time": 1772998054000,
+        "messaging": [
+          {
+            "sender": { "id": "200000000000001" },
+            "recipient": { "id": "100000000000001" },
+            "timestamp": 1772998054000,
+            "message": {
+              "mid": "m_FAKE_MSG_ID_002",
+              "text": "Tell me more"
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "deliveryConfirmation": {
+    "object": "page",
+    "entry": [
+      {
+        "id": "100000000000001",
+        "time": 1772998034000,
+        "messaging": [
+          {
+            "sender": { "id": "200000000000001" },
+            "recipient": { "id": "100000000000001" },
+            "timestamp": 1772998034000,
+            "delivery": {
+              "mids": ["m_SENT_MSG_001"],
+              "watermark": 1772998034000
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "readConfirmation": {
+    "object": "page",
+    "entry": [
+      {
+        "id": "100000000000001",
+        "time": 1772998044000,
+        "messaging": [
+          {
+            "sender": { "id": "200000000000001" },
+            "recipient": { "id": "100000000000001" },
+            "timestamp": 1772998044000,
+            "read": {
+              "watermark": 1772998044000
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "reactionAdded": {
+    "object": "page",
+    "entry": [
+      {
+        "id": "100000000000001",
+        "time": 1772998064000,
+        "messaging": [
+          {
+            "sender": { "id": "200000000000001" },
+            "recipient": { "id": "100000000000001" },
+            "timestamp": 1772998064000,
+            "reaction": {
+              "mid": "m_FAKE_MSG_ID_001",
+              "action": "react",
+              "emoji": "❤",
+              "reaction": "love"
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "reactionRemoved": {
+    "object": "page",
+    "entry": [
+      {
+        "id": "100000000000001",
+        "time": 1772998074000,
+        "messaging": [
+          {
+            "sender": { "id": "200000000000001" },
+            "recipient": { "id": "100000000000001" },
+            "timestamp": 1772998074000,
+            "reaction": {
+              "mid": "m_FAKE_MSG_ID_001",
+              "action": "unreact",
+              "emoji": "❤",
+              "reaction": "love"
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "postbackEncoded": {
+    "object": "page",
+    "entry": [
+      {
+        "id": "100000000000001",
+        "time": 1772998084000,
+        "messaging": [
+          {
+            "sender": { "id": "200000000000001" },
+            "recipient": { "id": "100000000000001" },
+            "timestamp": 1772998084000,
+            "postback": {
+              "title": "Say Hello",
+              "payload": "chat:{\"a\":\"hello\"}"
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "postbackLegacy": {
+    "object": "page",
+    "entry": [
+      {
+        "id": "100000000000001",
+        "time": 1772998094000,
+        "messaging": [
+          {
+            "sender": { "id": "200000000000001" },
+            "recipient": { "id": "100000000000001" },
+            "timestamp": 1772998094000,
+            "postback": {
+              "title": "Get Started",
+              "payload": "GET_STARTED"
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "postbackWithMid": {
+    "object": "page",
+    "entry": [
+      {
+        "id": "100000000000001",
+        "time": 1772998104000,
+        "messaging": [
+          {
+            "sender": { "id": "200000000000001" },
+            "recipient": { "id": "100000000000001" },
+            "timestamp": 1772998104000,
+            "postback": {
+              "mid": "m_POSTBACK_001",
+              "title": "Buy Now",
+              "payload": "chat:{\"a\":\"buy\",\"v\":\"sku_123\"}"
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "imageAttachment": {
+    "object": "page",
+    "entry": [
+      {
+        "id": "100000000000001",
+        "time": 1772998104000,
+        "messaging": [
+          {
+            "sender": { "id": "200000000000001" },
+            "recipient": { "id": "100000000000001" },
+            "timestamp": 1772998104000,
+            "message": {
+              "mid": "m_FAKE_IMG_001",
+              "attachments": [
+                {
+                  "type": "image",
+                  "payload": {
+                    "url": "https://example.com/image.jpg"
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "echoMessage": {
+    "object": "page",
+    "entry": [
+      {
+        "id": "100000000000001",
+        "time": 1772998114000,
+        "messaging": [
+          {
+            "sender": { "id": "100000000000001" },
+            "recipient": { "id": "200000000000001" },
+            "timestamp": 1772998114000,
+            "message": {
+              "mid": "m_ECHO_MSG_001",
+              "text": "Bot response",
+              "is_echo": true
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "richAttachmentTypes": {
+    "object": "page",
+    "entry": [
+      {
+        "id": "100000000000001",
+        "time": 1772998124000,
+        "messaging": [
+          {
+            "sender": { "id": "200000000000001" },
+            "recipient": { "id": "100000000000001" },
+            "timestamp": 1772998124000,
+            "message": {
+              "mid": "m_RICH_001",
+              "attachments": [
+                {
+                  "type": "fallback",
+                  "payload": {
+                    "url": "https://example.com/link",
+                    "title": "Check this out"
+                  }
+                },
+                {
+                  "type": "reel",
+                  "payload": {
+                    "url": "https://example.com/reel",
+                    "title": "My Reel",
+                    "reel_video_id": 12345
+                  }
+                },
+                {
+                  "type": "post",
+                  "payload": {
+                    "url": "https://example.com/post",
+                    "title": "My Post",
+                    "id": 67890
+                  }
+                },
+                {
+                  "type": "appointment_booking",
+                  "payload": {
+                    "booking_id": "booking_001",
+                    "status": "confirmed",
+                    "start_time": 1739612400,
+                    "end_time": 1739616000,
+                    "timezone": "America/Los_Angeles"
+                  }
+                },
+                {
+                  "type": "template",
+                  "payload": {
+                    "product": {
+                      "elements": [
+                        {
+                          "id": "prod_1",
+                          "retailer_id": "SKU_001",
+                          "image_url": "https://example.com/prod.jpg",
+                          "title": "Product 1",
+                          "subtitle": "$40"
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "type": "image",
+                  "payload": {
+                    "url": "https://example.com/sticker",
+                    "sticker_id": 369239263222822
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "messageWithQuickReply": {
+    "object": "page",
+    "entry": [
+      {
+        "id": "100000000000001",
+        "time": 1772998134000,
+        "messaging": [
+          {
+            "sender": { "id": "200000000000001" },
+            "recipient": { "id": "100000000000001" },
+            "timestamp": 1772998134000,
+            "message": {
+              "mid": "m_QR_001",
+              "text": "Option 1",
+              "quick_reply": {
+                "payload": "OPTION_1_PAYLOAD"
+              }
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "messageWithReplyTo": {
+    "object": "page",
+    "entry": [
+      {
+        "id": "100000000000001",
+        "time": 1772998144000,
+        "messaging": [
+          {
+            "sender": { "id": "200000000000001" },
+            "recipient": { "id": "100000000000001" },
+            "timestamp": 1772998144000,
+            "message": {
+              "mid": "m_REPLY_001",
+              "text": "hello, world!",
+              "reply_to": {
+                "mid": "m_ORIGINAL_001",
+                "is_self_reply": false
+              }
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "messageWithReferral": {
+    "object": "page",
+    "entry": [
+      {
+        "id": "100000000000001",
+        "time": 1772998154000,
+        "messaging": [
+          {
+            "sender": { "id": "200000000000001" },
+            "recipient": { "id": "100000000000001" },
+            "timestamp": 1772998154000,
+            "message": {
+              "mid": "m_REFERRAL_001",
+              "text": "hello, world!",
+              "referral": {
+                "product": {
+                  "id": "PROD_001"
+                }
+              }
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "messageWithCommands": {
+    "object": "page",
+    "entry": [
+      {
+        "id": "100000000000001",
+        "time": 1772998164000,
+        "messaging": [
+          {
+            "sender": { "id": "200000000000001" },
+            "recipient": { "id": "100000000000001" },
+            "timestamp": 1772998164000,
+            "message": {
+              "mid": "m_COMMANDS_001",
+              "text": "find flights from SFO to LAX next Thursday",
+              "commands": [
+                {
+                  "name": "flights"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

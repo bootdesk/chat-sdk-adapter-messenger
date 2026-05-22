@@ -9,7 +9,10 @@ use BootDesk\ChatSDK\Core\Chat;
 use BootDesk\ChatSDK\Core\Contracts\Adapter;
 use BootDesk\ChatSDK\Core\Contracts\FileUploadConverter;
 use BootDesk\ChatSDK\Core\Contracts\FormatConverter;
+use BootDesk\ChatSDK\Core\Contracts\HandlesActions;
+use BootDesk\ChatSDK\Core\Contracts\HandlesBatchedWebhooks;
 use BootDesk\ChatSDK\Core\Contracts\HandlesReactions;
+use BootDesk\ChatSDK\Core\Contracts\HandlesSlashCommands;
 use BootDesk\ChatSDK\Core\Contracts\HandlesStatuses;
 use BootDesk\ChatSDK\Core\Exceptions\AdapterException;
 use BootDesk\ChatSDK\Core\Exceptions\AuthenticationException;
@@ -21,12 +24,13 @@ use BootDesk\ChatSDK\Core\SentMessage;
 use BootDesk\ChatSDK\Core\Support\NullFileUploadConverter;
 use BootDesk\ChatSDK\Core\ThreadInfo;
 use BootDesk\ChatSDK\Core\UserInfo;
+use BootDesk\ChatSDK\Core\WebhookEvent;
 use Nyholm\Psr7\Factory\Psr17Factory;
 use Psr\Http\Client\ClientInterface;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 
-class MessengerAdapter implements Adapter, HandlesReactions, HandlesStatuses
+class MessengerAdapter implements Adapter, HandlesActions, HandlesBatchedWebhooks, HandlesReactions, HandlesSlashCommands, HandlesStatuses
 {
     protected ?string $botUserId = null;
 
@@ -41,7 +45,7 @@ class MessengerAdapter implements Adapter, HandlesReactions, HandlesStatuses
         protected readonly ClientInterface $httpClient,
         string $appSecret,
         string $verifyToken,
-        protected readonly string $apiVersion = 'v21.0',
+        protected readonly string $apiVersion = 'v25.0',
         protected readonly string $apiUrl = 'https://graph.facebook.com',
         protected readonly ?Psr17Factory $psrFactory = null,
         ?FileUploadConverter $fileUploadConverter = null,
@@ -91,6 +95,7 @@ class MessengerAdapter implements Adapter, HandlesReactions, HandlesStatuses
         }
 
         foreach ($payload['entry'] ?? [] as $entry) {
+            $originId = $entry['id'] ?? null;
             foreach ($entry['messaging'] ?? [] as $event) {
                 $reaction = $event['reaction'] ?? null;
                 if ($reaction === null) {
@@ -108,13 +113,60 @@ class MessengerAdapter implements Adapter, HandlesReactions, HandlesStatuses
                     'rawEmoji' => $emoji,
                     'added' => $action === 'react',
                     'threadId' => $threadId,
-                    'messageId' => $reaction['mid'] ?? $event['timestamp'] ?? '',
+                    'messageId' => $reaction['mid'] ?? (string) ($event['timestamp'] ?? ''),
                     'userId' => $senderId,
                     'raw' => $payload,
+                    'originId' => $originId,
                 ];
             }
         }
 
+        return null;
+    }
+
+    public function parseAction(ServerRequestInterface $request): ?array
+    {
+        $body = (string) $request->getBody();
+        $payload = json_decode($body, true);
+
+        if (! is_array($payload) || ($payload['object'] ?? '') !== 'page') {
+            return null;
+        }
+
+        foreach ($payload['entry'] ?? [] as $entry) {
+            $originId = $entry['id'] ?? null;
+            foreach ($entry['messaging'] ?? [] as $event) {
+                $postback = $event['postback'] ?? null;
+                if ($postback === null) {
+                    continue;
+                }
+
+                $senderId = $event['sender']['id'] ?? '';
+                $threadId = $this->encodeThreadId(['recipientId' => $senderId]);
+
+                $decoded = MessengerCards::decodeCallbackData($postback['payload'] ?? null);
+
+                return [
+                    'actionId' => $decoded['actionId'],
+                    'value' => $decoded['value'],
+                    'threadId' => $threadId,
+                    'messageId' => $postback['mid'] ?? (string) ($event['timestamp'] ?? ''),
+                    'userId' => $senderId,
+                    'isBot' => false,
+                    'isMe' => false,
+                    'triggerId' => null,
+                    'raw' => $payload,
+                    'callbackQueryId' => null,
+                    'originId' => $originId,
+                ];
+            }
+        }
+
+        return null;
+    }
+
+    public function acknowledgeAction(?string $callbackQueryId): ?ResponseInterface
+    {
         return null;
     }
 
@@ -128,6 +180,7 @@ class MessengerAdapter implements Adapter, HandlesReactions, HandlesStatuses
         }
 
         foreach ($payload['entry'] ?? [] as $entry) {
+            $originId = $entry['id'] ?? null;
             foreach ($entry['messaging'] ?? [] as $event) {
                 $senderId = $event['sender']['id'] ?? '';
                 $threadId = $this->encodeThreadId(['recipientId' => $senderId]);
@@ -138,8 +191,9 @@ class MessengerAdapter implements Adapter, HandlesReactions, HandlesStatuses
                         'messageIds' => $event['delivery']['mids'] ?? [],
                         'threadId' => $threadId,
                         'userId' => $senderId,
-                        'timestamp' => $event['delivery']['watermark'] ?? null,
+                        'timestamp' => isset($event['delivery']['watermark']) ? (int) $event['delivery']['watermark'] : null,
                         'raw' => $payload,
+                        'originId' => $originId,
                     ];
                 }
 
@@ -149,10 +203,56 @@ class MessengerAdapter implements Adapter, HandlesReactions, HandlesStatuses
                         'messageIds' => [],
                         'threadId' => $threadId,
                         'userId' => $senderId,
-                        'timestamp' => $event['read']['watermark'] ?? null,
+                        'timestamp' => isset($event['read']['watermark']) ? (int) $event['read']['watermark'] : null,
                         'raw' => $payload,
+                        'originId' => $originId,
                     ];
                 }
+            }
+        }
+
+        return null;
+    }
+
+    public function parseSlashCommand(ServerRequestInterface $request): ?array
+    {
+        $body = (string) $request->getBody();
+        $payload = json_decode($body, true);
+
+        if (! is_array($payload) || ($payload['object'] ?? '') !== 'page') {
+            return null;
+        }
+
+        foreach ($payload['entry'] ?? [] as $entry) {
+            foreach ($entry['messaging'] ?? [] as $event) {
+                $message = $event['message'] ?? null;
+                if ($message === null || ($message['is_echo'] ?? false)) {
+                    continue;
+                }
+
+                $rawText = $message['text'] ?? '';
+
+                if ($rawText === '' || $rawText[0] !== '/') {
+                    continue;
+                }
+
+                $senderId = $event['sender']['id'] ?? '';
+                $threadId = $this->encodeThreadId(['recipientId' => $senderId]);
+
+                $parts = explode(' ', $rawText, 2);
+                $command = $parts[0];
+                $text = $parts[1] ?? '';
+
+                return [
+                    'command' => $command,
+                    'text' => $text,
+                    'userId' => $senderId,
+                    'isBot' => false,
+                    'isMe' => false,
+                    'channelId' => $threadId,
+                    'triggerId' => null,
+                    'raw' => $body,
+                ];
             }
         }
 
@@ -170,6 +270,7 @@ class MessengerAdapter implements Adapter, HandlesReactions, HandlesStatuses
 
         // Walk entries to find the first user message
         foreach ($payload['entry'] ?? [] as $entry) {
+            $originId = $entry['id'] ?? null;
             foreach ($entry['messaging'] ?? [] as $event) {
                 $message = $event['message'] ?? null;
                 if ($message === null || ($message['is_echo'] ?? false)) {
@@ -190,11 +291,160 @@ class MessengerAdapter implements Adapter, HandlesReactions, HandlesStatuses
                     attachments: $this->extractAttachments($message),
                     isDM: true,
                     raw: $body,
+                    originId: $originId,
                 );
             }
         }
 
         throw new AdapterException('No user message found in Messenger webhook payload');
+    }
+
+    public function parseBatchedWebhook(ServerRequestInterface $request): array
+    {
+        $body = (string) $request->getBody();
+        $payload = json_decode($body, true);
+
+        if (! is_array($payload) || ($payload['object'] ?? '') !== 'page') {
+            return [];
+        }
+
+        $events = [];
+
+        foreach ($payload['entry'] ?? [] as $entry) {
+            $originId = $entry['id'] ?? null;
+            foreach ($entry['messaging'] ?? [] as $event) {
+                $senderId = $event['sender']['id'] ?? '';
+                $threadId = $this->encodeThreadId(['recipientId' => $senderId]);
+
+                // Reaction
+                if (isset($event['reaction'])) {
+                    $reaction = $event['reaction'];
+                    $events[] = new WebhookEvent(
+                        type: WebhookEvent::TYPE_REACTION,
+                        threadId: $threadId,
+                        payload: [
+                            'emoji' => $reaction['emoji'] ?? $reaction['reaction'] ?? '',
+                            'rawEmoji' => $reaction['emoji'] ?? $reaction['reaction'] ?? '',
+                            'added' => ($reaction['action'] ?? '') === 'react',
+                            'messageId' => $reaction['mid'] ?? (string) ($event['timestamp'] ?? ''),
+                            'userId' => $senderId,
+                            'raw' => $payload,
+                        ],
+                        originId: $originId,
+                    );
+
+                    continue;
+                }
+
+                // Postback
+                if (isset($event['postback'])) {
+                    $postback = $event['postback'];
+                    $decoded = MessengerCards::decodeCallbackData($postback['payload'] ?? null);
+                    $events[] = new WebhookEvent(
+                        type: WebhookEvent::TYPE_ACTION,
+                        threadId: $threadId,
+                        payload: [
+                            'actionId' => $decoded['actionId'],
+                            'value' => $decoded['value'],
+                            'messageId' => $postback['mid'] ?? (string) ($event['timestamp'] ?? ''),
+                            'userId' => $senderId,
+                            'isBot' => false,
+                            'isMe' => false,
+                            'triggerId' => null,
+                            'raw' => $payload,
+                            'callbackQueryId' => null,
+                        ],
+                        originId: $originId,
+                    );
+
+                    continue;
+                }
+
+                // Delivery
+                if (isset($event['delivery'])) {
+                    $events[] = new WebhookEvent(
+                        type: WebhookEvent::TYPE_STATUS,
+                        threadId: $threadId,
+                        payload: [
+                            'type' => 'delivered',
+                            'messageIds' => $event['delivery']['mids'] ?? [],
+                            'userId' => $senderId,
+                            'timestamp' => isset($event['delivery']['watermark']) ? (int) $event['delivery']['watermark'] : null,
+                            'raw' => $payload,
+                        ],
+                        originId: $originId,
+                    );
+
+                    continue;
+                }
+
+                // Read
+                if (isset($event['read'])) {
+                    $events[] = new WebhookEvent(
+                        type: WebhookEvent::TYPE_STATUS,
+                        threadId: $threadId,
+                        payload: [
+                            'type' => 'read',
+                            'messageIds' => [],
+                            'userId' => $senderId,
+                            'timestamp' => isset($event['read']['watermark']) ? (int) $event['read']['watermark'] : null,
+                            'raw' => $payload,
+                        ],
+                        originId: $originId,
+                    );
+
+                    continue;
+                }
+
+                // User message (skip echoes)
+                $message = $event['message'] ?? null;
+                if ($message !== null && ! ($message['is_echo'] ?? false)) {
+                    $text = $message['text'] ?? '';
+                    $mid = $message['mid'] ?? uniqid('msg_');
+
+                    // Check if this is a slash command
+                    if ($text !== '' && $text[0] === '/') {
+                        $parts = explode(' ', $text, 2);
+                        $command = $parts[0];
+                        $cmdText = $parts[1] ?? '';
+
+                        $events[] = new WebhookEvent(
+                            type: WebhookEvent::TYPE_SLASH_COMMAND,
+                            threadId: $threadId,
+                            payload: [
+                                'command' => $command,
+                                'text' => $cmdText,
+                                'userId' => $senderId,
+                                'isBot' => false,
+                                'isMe' => false,
+                                'channelId' => $threadId,
+                                'triggerId' => null,
+                                'raw' => $payload,
+                            ],
+                            originId: $originId,
+                        );
+                    } else {
+                        $events[] = new WebhookEvent(
+                            type: WebhookEvent::TYPE_MESSAGE,
+                            threadId: $threadId,
+                            payload: new Message(
+                                id: $mid,
+                                threadId: $threadId,
+                                author: new Author(id: $senderId, isBot: false),
+                                text: $text,
+                                attachments: $this->extractAttachments($message),
+                                isDM: true,
+                                raw: $body,
+                                originId: $originId,
+                            ),
+                            originId: $originId,
+                        );
+                    }
+                }
+            }
+        }
+
+        return $events;
     }
 
     public function encodeThreadId(mixed $platformData): string
@@ -236,6 +486,15 @@ class MessengerAdapter implements Adapter, HandlesReactions, HandlesStatuses
             );
         }
 
+        $basePayload = [
+            'recipient' => ['id' => $recipientId],
+            'messaging_type' => 'RESPONSE',
+        ];
+
+        if ($message->replyToMessageId !== null) {
+            $basePayload['reply_to'] = ['mid' => $message->replyToMessageId];
+        }
+
         // Attachments take priority
         if ($message->attachments !== []) {
             $att = $message->attachments[0];
@@ -249,26 +508,24 @@ class MessengerAdapter implements Adapter, HandlesReactions, HandlesStatuses
             };
 
             $response = $this->graphApiCall('me/messages', [
-                'recipient' => ['id' => $recipientId],
+                ...$basePayload,
                 'message' => [
                     'attachment' => $attachmentData,
                 ],
-                'messaging_type' => 'RESPONSE',
             ]);
 
             // Append text as a follow-up if present
             if ($text !== '') {
                 $this->graphApiCall('me/messages', [
-                    'recipient' => ['id' => $recipientId],
+                    ...$basePayload,
                     'message' => ['text' => $this->truncate($text)],
-                    'messaging_type' => 'RESPONSE',
                 ]);
             }
 
             return new SentMessage(
                 id: $response['message_id'] ?? '',
                 threadId: $threadId,
-                timestamp: (string) ($response['recipient_id'] ?? ''),
+                timestamp: (string) time(),
             );
         }
 
@@ -282,39 +539,35 @@ class MessengerAdapter implements Adapter, HandlesReactions, HandlesStatuses
             $result = $template->toMessenger();
 
             $response = $this->graphApiCall('me/messages', [
-                'recipient' => ['id' => $recipientId],
+                ...$basePayload,
                 'message' => $result['attachment'],
-                'messaging_type' => 'RESPONSE',
             ]);
         } elseif ($message->isCard()) {
             $cardResult = MessengerCards::toMessengerPayload($message->content);
 
             if ($cardResult['type'] === 'template') {
                 $response = $this->graphApiCall('me/messages', [
-                    'recipient' => ['id' => $recipientId],
+                    ...$basePayload,
                     'message' => $cardResult['attachment'],
-                    'messaging_type' => 'RESPONSE',
                 ]);
             } else {
                 $response = $this->graphApiCall('me/messages', [
-                    'recipient' => ['id' => $recipientId],
+                    ...$basePayload,
                     'message' => ['text' => $this->truncate($cardResult['text'])],
-                    'messaging_type' => 'RESPONSE',
                 ]);
             }
         } else {
             $text = $this->formatConverter->renderPostable($message);
             $response = $this->graphApiCall('me/messages', [
-                'recipient' => ['id' => $recipientId],
+                ...$basePayload,
                 'message' => ['text' => $this->truncate($text)],
-                'messaging_type' => 'RESPONSE',
             ]);
         }
 
         return new SentMessage(
             id: $response['message_id'] ?? '',
             threadId: $threadId,
-            timestamp: (string) ($response['recipient_id'] ?? ''),
+            timestamp: (string) time(),
         );
     }
 
@@ -446,17 +699,43 @@ class MessengerAdapter implements Adapter, HandlesReactions, HandlesStatuses
         $attachments = [];
 
         foreach ($message['attachments'] ?? [] as $att) {
-            $type = match ($att['type'] ?? '') {
-                'image' => 'image',
-                'video' => 'video',
-                'audio' => 'audio',
+            $rawType = $att['type'] ?? '';
+
+            $type = match ($rawType) {
+                'image', 'video', 'audio', 'file', 'fallback' => $rawType,
+                'reel', 'ig_reel', 'post', 'ig_post', 'appointment_booking', 'template' => $rawType,
                 default => 'file',
+            };
+
+            $payload = $att['payload'] ?? [];
+
+            $metadata = match ($rawType) {
+                'fallback', 'reel', 'ig_reel', 'post', 'ig_post' => array_filter([
+                    'title' => $payload['title'] ?? null,
+                    'reel_video_id' => $payload['reel_video_id'] ?? null,
+                    'id' => $payload['id'] ?? null,
+                ]),
+                'appointment_booking' => array_filter([
+                    'booking_id' => $payload['booking_id'] ?? null,
+                    'status' => $payload['status'] ?? null,
+                    'start_time' => $payload['start_time'] ?? null,
+                    'end_time' => $payload['end_time'] ?? null,
+                    'timezone' => $payload['timezone'] ?? null,
+                ]),
+                'template' => array_filter([
+                    'product' => $payload['product'] ?? null,
+                ]),
+                'image' => array_filter([
+                    'sticker_id' => $payload['sticker_id'] ?? null,
+                ]),
+                default => [],
             };
 
             $attachments[] = new Attachment(
                 type: $type,
-                url: $att['payload']['url'] ?? null,
-                mimeType: $att['payload']['mime_type'] ?? null,
+                url: $payload['url'] ?? null,
+                mimeType: $payload['mime_type'] ?? null,
+                fetchMetadata: $metadata !== [] ? $metadata : null,
             );
         }
 

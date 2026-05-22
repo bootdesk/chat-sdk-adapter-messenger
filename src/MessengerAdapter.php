@@ -14,10 +14,13 @@ use BootDesk\ChatSDK\Core\Contracts\HandlesBatchedWebhooks;
 use BootDesk\ChatSDK\Core\Contracts\HandlesReactions;
 use BootDesk\ChatSDK\Core\Contracts\HandlesSlashCommands;
 use BootDesk\ChatSDK\Core\Contracts\HandlesStatuses;
+use BootDesk\ChatSDK\Core\Contracts\HasAuthorInfo;
 use BootDesk\ChatSDK\Core\Exceptions\AdapterException;
 use BootDesk\ChatSDK\Core\Exceptions\AuthenticationException;
 use BootDesk\ChatSDK\Core\FetchOptions;
 use BootDesk\ChatSDK\Core\FetchResult;
+use BootDesk\ChatSDK\Core\LocalizationType;
+use BootDesk\ChatSDK\Core\LocalizationValue;
 use BootDesk\ChatSDK\Core\Message;
 use BootDesk\ChatSDK\Core\PostableMessage;
 use BootDesk\ChatSDK\Core\SentMessage;
@@ -30,7 +33,7 @@ use Psr\Http\Client\ClientInterface;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 
-class MessengerAdapter implements Adapter, HandlesActions, HandlesBatchedWebhooks, HandlesReactions, HandlesSlashCommands, HandlesStatuses
+class MessengerAdapter implements Adapter, HandlesActions, HandlesBatchedWebhooks, HandlesReactions, HandlesSlashCommands, HandlesStatuses, HasAuthorInfo
 {
     protected ?string $botUserId = null;
 
@@ -109,6 +112,7 @@ class MessengerAdapter implements Adapter, HandlesActions, HandlesBatchedWebhook
                 $threadId = $this->encodeThreadId(['recipientId' => $senderId]);
 
                 return [
+                    'author' => new Author(id: $senderId),
                     'emoji' => $emoji,
                     'rawEmoji' => $emoji,
                     'added' => $action === 'react',
@@ -147,6 +151,7 @@ class MessengerAdapter implements Adapter, HandlesActions, HandlesBatchedWebhook
                 $decoded = MessengerCards::decodeCallbackData($postback['payload'] ?? null);
 
                 return [
+                    'author' => new Author(id: $senderId),
                     'actionId' => $decoded['actionId'],
                     'value' => $decoded['value'],
                     'threadId' => $threadId,
@@ -244,6 +249,7 @@ class MessengerAdapter implements Adapter, HandlesActions, HandlesBatchedWebhook
                 $text = $parts[1] ?? '';
 
                 return [
+                    'author' => new Author(id: $senderId),
                     'command' => $command,
                     'text' => $text,
                     'userId' => $senderId,
@@ -323,6 +329,7 @@ class MessengerAdapter implements Adapter, HandlesActions, HandlesBatchedWebhook
                         type: WebhookEvent::TYPE_REACTION,
                         threadId: $threadId,
                         payload: [
+                            'author' => new Author(id: $senderId),
                             'emoji' => $reaction['emoji'] ?? $reaction['reaction'] ?? '',
                             'rawEmoji' => $reaction['emoji'] ?? $reaction['reaction'] ?? '',
                             'added' => ($reaction['action'] ?? '') === 'react',
@@ -344,6 +351,7 @@ class MessengerAdapter implements Adapter, HandlesActions, HandlesBatchedWebhook
                         type: WebhookEvent::TYPE_ACTION,
                         threadId: $threadId,
                         payload: [
+                            'author' => new Author(id: $senderId),
                             'actionId' => $decoded['actionId'],
                             'value' => $decoded['value'],
                             'messageId' => $postback['mid'] ?? (string) ($event['timestamp'] ?? ''),
@@ -412,6 +420,7 @@ class MessengerAdapter implements Adapter, HandlesActions, HandlesBatchedWebhook
                             type: WebhookEvent::TYPE_SLASH_COMMAND,
                             threadId: $threadId,
                             payload: [
+                                'author' => new Author(id: $senderId),
                                 'command' => $command,
                                 'text' => $cmdText,
                                 'userId' => $senderId,
@@ -637,6 +646,40 @@ class MessengerAdapter implements Adapter, HandlesActions, HandlesBatchedWebhook
         return new UserInfo(
             id: $userId,
             name: $name ?: $userId,
+        );
+    }
+
+    public function getAuthorInfo(Author $author): Author
+    {
+        $response = $this->graphApiCall($author->id, [], 'GET', ['fields' => 'locale,timezone,profile_pic']);
+
+        $localizations = [];
+        $profilePicture = $author->profilePicture;
+
+        if (isset($response['profile_pic'])) {
+            $profilePicture = $response['profile_pic'];
+        }
+
+        if (isset($response['locale'])) {
+            $localizations[] = new LocalizationValue(LocalizationType::Locale, $response['locale']);
+        }
+
+        if (isset($response['timezone'])) {
+            $localizations[] = new LocalizationValue(LocalizationType::Timezone, (string) $response['timezone']);
+        }
+
+        if ($localizations === [] && $profilePicture === $author->profilePicture) {
+            return $author;
+        }
+
+        return new Author(
+            $author->id,
+            $author->name,
+            $author->email,
+            $author->isMe,
+            $author->isBot,
+            $profilePicture,
+            ...$localizations,
         );
     }
 

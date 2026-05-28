@@ -2,12 +2,14 @@
 
 namespace BootDesk\ChatSDK\Messenger\Tests;
 
+use BootDesk\ChatSDK\Core\Attachment;
 use BootDesk\ChatSDK\Core\Cards\Button;
 use BootDesk\ChatSDK\Core\Cards\Card;
 use BootDesk\ChatSDK\Core\Chat;
 use BootDesk\ChatSDK\Core\Exceptions\AdapterException;
 use BootDesk\ChatSDK\Core\Exceptions\AuthenticationException;
 use BootDesk\ChatSDK\Core\PostableMessage;
+use BootDesk\ChatSDK\Core\SentMessage;
 use BootDesk\ChatSDK\Messenger\MessengerAdapter;
 use Nyholm\Psr7\Factory\Psr17Factory;
 use PHPUnit\Framework\TestCase;
@@ -299,6 +301,142 @@ class MessengerAdapterTest extends TestCase
         $card = Card::make()->section(fn ($s) => $s->text('Just text'));
         $sent = $this->adapter->postMessage('messenger:123456', PostableMessage::card($card));
         $this->assertSame('mid.123456', $sent->id);
+    }
+
+    public function test_post_with_attachment_and_text_returns_additional_messages(): void
+    {
+        $factory = $this->factory;
+        $callCount = 0;
+
+        $mockClient = new class($factory, $callCount) implements ClientInterface
+        {
+            private Psr17Factory $factory;
+
+            private int $callCount;
+
+            public function __construct(Psr17Factory $factory, int &$callCount)
+            {
+                $this->factory = $factory;
+                $this->callCount = &$callCount;
+            }
+
+            public function sendRequest(RequestInterface $request): ResponseInterface
+            {
+                $uri = (string) $request->getUri();
+                $method = $request->getMethod();
+
+                // Handle GET /me for initialization
+                if ($method === 'GET' && preg_match('#/me\?#', $uri)) {
+                    return $this->factory->createResponse(200)->withBody(
+                        $this->factory->createStream(json_encode(['id' => 'PAGE123', 'name' => 'MyBot']))
+                    );
+                }
+
+                $this->callCount++;
+
+                // Return incrementing message IDs so we can identify each call
+                return $this->factory->createResponse(200)->withBody(
+                    $this->factory->createStream(json_encode([
+                        'message_id' => 'mid.'.$this->callCount,
+                        'recipient_id' => 'U999',
+                    ]))
+                );
+            }
+        };
+
+        $adapter = new MessengerAdapter(
+            pageAccessToken: 'test-page-token',
+            appSecret: 'test_app_secret',
+            verifyToken: 'test_verify_token',
+            httpClient: $mockClient,
+            psrFactory: $factory,
+        );
+        $adapter->initialize($this->createMock(Chat::class));
+
+        $sent = $adapter->postMessage(
+            'messenger:123456',
+            new PostableMessage(
+                content: 'Check this out',
+                attachments: [new Attachment(url: 'https://example.com/photo.jpg', type: 'image')],
+            )
+        );
+
+        // First call = attachment, second call = text follow-up
+        $this->assertSame('mid.1', $sent->id);
+        $this->assertCount(1, $sent->additionalMessages);
+        $this->assertSame('mid.2', $sent->additionalMessages[0]->id);
+        $this->assertSame('messenger:123456', $sent->additionalMessages[0]->threadId);
+    }
+
+    public function test_post_with_attachment_only_no_text_no_additional_messages(): void
+    {
+        $factory = $this->factory;
+        $callCount = 0;
+
+        $mockClient = new class($factory, $callCount) implements ClientInterface
+        {
+            private Psr17Factory $factory;
+
+            private int $callCount;
+
+            public function __construct(Psr17Factory $factory, int &$callCount)
+            {
+                $this->factory = $factory;
+                $this->callCount = &$callCount;
+            }
+
+            public function sendRequest(RequestInterface $request): ResponseInterface
+            {
+                $uri = (string) $request->getUri();
+                $method = $request->getMethod();
+
+                // Handle GET /me for initialization
+                if ($method === 'GET' && preg_match('#/me\?#', $uri)) {
+                    return $this->factory->createResponse(200)->withBody(
+                        $this->factory->createStream(json_encode(['id' => 'PAGE123', 'name' => 'MyBot']))
+                    );
+                }
+
+                $this->callCount++;
+
+                return $this->factory->createResponse(200)->withBody(
+                    $this->factory->createStream(json_encode([
+                        'message_id' => 'mid.'.$this->callCount,
+                        'recipient_id' => 'U999',
+                    ]))
+                );
+            }
+        };
+
+        $adapter = new MessengerAdapter(
+            pageAccessToken: 'test-page-token',
+            appSecret: 'test_app_secret',
+            verifyToken: 'test_verify_token',
+            httpClient: $mockClient,
+            psrFactory: $factory,
+        );
+        $adapter->initialize($this->createMock(Chat::class));
+
+        // Empty content string — no text follow-up
+        $sent = $adapter->postMessage(
+            'messenger:123456',
+            new PostableMessage(
+                content: '',
+                attachments: [new Attachment(url: 'https://example.com/photo.jpg', type: 'image')],
+            )
+        );
+
+        $this->assertSame('mid.1', $sent->id);
+        $this->assertSame([], $sent->additionalMessages);
+    }
+
+    public function test_post_includes_raw_response(): void
+    {
+        $sent = $this->adapter->postMessage('messenger:123456', PostableMessage::text('Hello'));
+
+        $this->assertNotNull($sent->raw);
+        $this->assertIsArray($sent->raw);
+        $this->assertSame('mid.123456', $sent->raw['message_id']);
     }
 
     public function test_stream_collects_and_posts(): void

@@ -15,6 +15,7 @@ use BootDesk\ChatSDK\Core\Contracts\HandlesReactions;
 use BootDesk\ChatSDK\Core\Contracts\HandlesSlashCommands;
 use BootDesk\ChatSDK\Core\Contracts\HandlesStatuses;
 use BootDesk\ChatSDK\Core\Contracts\HasAuthorInfo;
+use BootDesk\ChatSDK\Core\Contracts\RequiresAsyncResponse;
 use BootDesk\ChatSDK\Core\Exceptions\AdapterException;
 use BootDesk\ChatSDK\Core\Exceptions\AuthenticationException;
 use BootDesk\ChatSDK\Core\FetchOptions;
@@ -33,7 +34,7 @@ use Psr\Http\Client\ClientInterface;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 
-class MessengerAdapter implements Adapter, HandlesActions, HandlesBatchedWebhooks, HandlesReactions, HandlesSlashCommands, HandlesStatuses, HasAuthorInfo
+class MessengerAdapter implements Adapter, HandlesActions, HandlesBatchedWebhooks, HandlesReactions, HandlesSlashCommands, HandlesStatuses, HasAuthorInfo, RequiresAsyncResponse
 {
     protected ?string $botUserId = null;
 
@@ -523,18 +524,29 @@ class MessengerAdapter implements Adapter, HandlesActions, HandlesBatchedWebhook
                 ],
             ]);
 
+            $additionalMessages = [];
+
             // Append text as a follow-up if present
             if ($text !== '') {
-                $this->graphApiCall('me/messages', [
+                $textResponse = $this->graphApiCall('me/messages', [
                     ...$basePayload,
                     'message' => ['text' => $this->truncate($text)],
                 ]);
+
+                $additionalMessages[] = new SentMessage(
+                    id: $textResponse['message_id'] ?? '',
+                    threadId: $threadId,
+                    timestamp: (string) time(),
+                    raw: $textResponse,
+                );
             }
 
             return new SentMessage(
                 id: $response['message_id'] ?? '',
                 threadId: $threadId,
                 timestamp: (string) time(),
+                additionalMessages: $additionalMessages,
+                raw: $response,
             );
         }
 
@@ -577,6 +589,7 @@ class MessengerAdapter implements Adapter, HandlesActions, HandlesBatchedWebhook
             id: $response['message_id'] ?? '',
             threadId: $threadId,
             timestamp: (string) time(),
+            raw: $response,
         );
     }
 

@@ -49,6 +49,10 @@ The `ChatServiceProvider` auto-binds `Psr\Http\Client\ClientInterface` to `Guzzl
 $adapter->postMessage('messenger:1234567890', 'Hello from laravel-bootdesk!');
 ```
 
+## Text Formatting
+
+Messenger supports `*bold*`, `_italic_`, `~strikethrough~`, `` `monospace` ``, and ``` ```code blocks``` ``` syntax. The SDK's `MessengerFormatConverter` automatically converts standard markdown (`**bold**`, `~~strike~~`) to Messenger format when sending, and converts Messenger syntax back to standard markdown when receiving.
+
 ## Message Templates
 
 Messenger supports rich message templates via `PostableMessage::template()` with `MessengerTemplate`:

@@ -368,6 +368,73 @@ class MessengerAdapterTest extends TestCase
         $this->assertSame('messenger:123456', $sent->additionalMessages[0]->threadId);
     }
 
+    public function test_post_with_attachment_formats_markdown_in_follow_up_text(): void
+    {
+        $factory = $this->factory;
+        $capturedBody = '';
+
+        $mockClient = new class($factory, $capturedBody) implements ClientInterface
+        {
+            private Psr17Factory $factory;
+
+            private string $capturedBody;
+
+            private int $callCount = 0;
+
+            public function __construct(Psr17Factory $factory, string &$capturedBody)
+            {
+                $this->factory = $factory;
+                $this->capturedBody = &$capturedBody;
+            }
+
+            public function sendRequest(RequestInterface $request): ResponseInterface
+            {
+                $uri = (string) $request->getUri();
+                $method = $request->getMethod();
+
+                if ($method === 'GET' && preg_match('#/me\?#', $uri)) {
+                    return $this->factory->createResponse(200)->withBody(
+                        $this->factory->createStream(json_encode(['id' => 'PAGE123', 'name' => 'MyBot']))
+                    );
+                }
+
+                $this->callCount++;
+
+                // Capture the second request body (follow-up text)
+                if ($this->callCount === 2) {
+                    $this->capturedBody = (string) $request->getBody();
+                }
+
+                return $this->factory->createResponse(200)->withBody(
+                    $this->factory->createStream(json_encode([
+                        'message_id' => 'mid.'.$this->callCount,
+                        'recipient_id' => 'U999',
+                    ]))
+                );
+            }
+        };
+
+        $adapter = new MessengerAdapter(
+            pageAccessToken: 'test-page-token',
+            appSecret: 'test_app_secret',
+            verifyToken: 'test_verify_token',
+            httpClient: $mockClient,
+            psrFactory: $factory,
+        );
+        $adapter->initialize($this->createMock(Chat::class));
+
+        $adapter->postMessage(
+            'messenger:123456',
+            new PostableMessage(
+                content: '**bold** _italic_ ~strike~ `code`',
+                attachments: [new Attachment(url: 'https://example.com/photo.jpg', type: 'image')],
+            )
+        );
+
+        $body = json_decode($capturedBody, true);
+        $this->assertSame('*bold* _italic_ ~strike~ `code`', $body['message']['text']);
+    }
+
     public function test_post_with_attachment_only_no_text_no_additional_messages(): void
     {
         $factory = $this->factory;

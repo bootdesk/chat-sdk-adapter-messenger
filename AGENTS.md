@@ -4,7 +4,7 @@ Facebook Messenger adapter for bootdesk/chat-sdk-core. Namespace: `BootDesk\Chat
 
 ## files
 - `MessengerAdapter` — implements `Adapter` using Messenger Send API
-- `MessengerFormatConverter` — Messenger text ↔ CommonMark AST
+- `MessengerFormatConverter` — Messenger text ↔ CommonMark AST. Uses `*bold*`, `_italic_`, `~strikethrough~`, `` `code` ``, ``` ```block``` ``` syntax. `renderPostable()` converts standard markdown (`**bold**`, `~~strike~~`) to Messenger format. Lists/tables rendered as plain pipe text. No link support in text body.
 - `MessengerCards` — Card model → Messenger Generic Template / Button Template
 - `MessengerTemplate` — structured message template builder
 - `MessengerWebhookVerifier` — verify_token challenge + HMAC signature

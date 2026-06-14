@@ -25,6 +25,7 @@ use BootDesk\ChatSDK\Core\LocalizationValue;
 use BootDesk\ChatSDK\Core\Message;
 use BootDesk\ChatSDK\Core\PostableMessage;
 use BootDesk\ChatSDK\Core\SentMessage;
+use BootDesk\ChatSDK\Core\Support\EmojiResolver;
 use BootDesk\ChatSDK\Core\Support\NullFileUploadConverter;
 use BootDesk\ChatSDK\Core\ThreadInfo;
 use BootDesk\ChatSDK\Core\UserInfo;
@@ -44,6 +45,8 @@ class MessengerAdapter implements Adapter, HandlesActions, HandlesBatchedWebhook
 
     protected FileUploadConverter $fileUploadConverter;
 
+    protected EmojiResolver $emojiResolver;
+
     public function __construct(
         protected readonly string $pageAccessToken,
         protected readonly ClientInterface $httpClient,
@@ -53,10 +56,12 @@ class MessengerAdapter implements Adapter, HandlesActions, HandlesBatchedWebhook
         protected readonly string $apiUrl = 'https://graph.facebook.com',
         protected readonly ?Psr17Factory $psrFactory = null,
         ?FileUploadConverter $fileUploadConverter = null,
+        ?EmojiResolver $emojiResolver = null,
     ) {
         $this->formatConverter = new MessengerFormatConverter;
         $this->webhookVerifier = new MessengerWebhookVerifier($appSecret, $verifyToken, $psrFactory);
         $this->fileUploadConverter = $fileUploadConverter ?? new NullFileUploadConverter;
+        $this->emojiResolver = $emojiResolver ?? EmojiResolver::default();
     }
 
     public function getName(): string
@@ -114,7 +119,7 @@ class MessengerAdapter implements Adapter, HandlesActions, HandlesBatchedWebhook
 
                 return [
                     'author' => new Author(id: $senderId),
-                    'emoji' => $emoji,
+                    'emoji' => $this->emojiResolver->fromGChat($emoji),
                     'rawEmoji' => $emoji,
                     'added' => $action === 'react',
                     'threadId' => $threadId,
@@ -326,13 +331,14 @@ class MessengerAdapter implements Adapter, HandlesActions, HandlesBatchedWebhook
                 // Reaction
                 if (isset($event['reaction'])) {
                     $reaction = $event['reaction'];
+                    $rawEmoji = $reaction['emoji'] ?? $reaction['reaction'] ?? '';
                     $events[] = new WebhookEvent(
                         type: WebhookEvent::TYPE_REACTION,
                         threadId: $threadId,
                         payload: [
                             'author' => new Author(id: $senderId),
-                            'emoji' => $reaction['emoji'] ?? $reaction['reaction'] ?? '',
-                            'rawEmoji' => $reaction['emoji'] ?? $reaction['reaction'] ?? '',
+                            'emoji' => $this->emojiResolver->fromGChat($rawEmoji),
+                            'rawEmoji' => $rawEmoji,
                             'added' => ($reaction['action'] ?? '') === 'react',
                             'messageId' => $reaction['mid'] ?? (string) ($event['timestamp'] ?? ''),
                             'userId' => $senderId,

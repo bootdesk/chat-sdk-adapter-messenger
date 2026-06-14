@@ -1099,7 +1099,8 @@ class MessengerAdapterTest extends TestCase
 
         $this->assertNotNull($result);
         $this->assertSame('m_FAKE_MSG_ID_001', $result['messageId']);
-        $this->assertSame('❤', $result['emoji']);
+        $this->assertSame('heart', $result['emoji']);
+        $this->assertSame('❤', $result['rawEmoji']);
         $this->assertTrue($result['added']);
     }
 
@@ -1257,7 +1258,8 @@ class MessengerAdapterTest extends TestCase
 
         $this->assertNotNull($result);
         $this->assertSame('m_FAKE_MSG_ID_001', $result['messageId']);
-        $this->assertSame('❤', $result['emoji']);
+        $this->assertSame('heart', $result['emoji']);
+        $this->assertSame('❤', $result['rawEmoji']);
         $this->assertTrue($result['added']);
         $this->assertSame('messenger:200000000000001', $result['threadId']);
     }
@@ -1487,7 +1489,8 @@ class MessengerAdapterTest extends TestCase
         $this->assertSame('PAGE1', $events[1]->originId);
 
         $this->assertSame('reaction', $events[2]->type);
-        $this->assertSame('😊', $events[2]->payload['emoji']);
+        $this->assertSame('smile', $events[2]->payload['emoji']);
+        $this->assertSame('😊', $events[2]->payload['rawEmoji']);
         $this->assertTrue($events[2]->payload['added']);
         $this->assertSame('PAGE1', $events[2]->originId);
 

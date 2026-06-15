@@ -8,8 +8,10 @@ use BootDesk\ChatSDK\Core\Cards\Card;
 use BootDesk\ChatSDK\Core\Chat;
 use BootDesk\ChatSDK\Core\Exceptions\AdapterException;
 use BootDesk\ChatSDK\Core\Exceptions\AuthenticationException;
+use BootDesk\ChatSDK\Core\Exceptions\UnsupportedOperationException;
 use BootDesk\ChatSDK\Core\PostableMessage;
 use BootDesk\ChatSDK\Core\SentMessage;
+use BootDesk\ChatSDK\Core\WebhookEvent;
 use BootDesk\ChatSDK\Messenger\MessengerAdapter;
 use Nyholm\Psr7\Factory\Psr17Factory;
 use PHPUnit\Framework\TestCase;
@@ -258,7 +260,7 @@ class MessengerAdapterTest extends TestCase
 
     public function test_parse_webhook_no_user_message(): void
     {
-        $this->expectException(AdapterException::class);
+        $this->expectException(UnsupportedOperationException::class);
 
         $body = json_encode([
             'object' => 'page',
@@ -1341,7 +1343,7 @@ class MessengerAdapterTest extends TestCase
         $request = $this->factory->createServerRequest('POST', '/webhook')
             ->withBody($this->factory->createStream(json_encode($fixture['echoMessage'])));
 
-        $this->expectException(AdapterException::class);
+        $this->expectException(UnsupportedOperationException::class);
         $this->adapter->parseWebhook($request);
     }
 
@@ -1528,8 +1530,9 @@ class MessengerAdapterTest extends TestCase
 
         $events = $this->adapter->parseBatchedWebhook($request);
 
-        $this->assertCount(1, $events);
-        $this->assertSame('real', $events[0]->payload->text);
+        $this->assertCount(2, $events);
+        $this->assertSame(WebhookEvent::TYPE_UNSUPPORTED, $events[0]->type);
+        $this->assertSame('real', $events[1]->payload->text);
     }
 
     public function test_parse_batched_invalid_object(): void

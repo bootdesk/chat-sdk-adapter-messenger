@@ -528,46 +528,63 @@ class MessengerAdapter implements Adapter, HandlesActions, HandlesBatchedWebhook
         // Attachments take priority
         if ($message->attachments !== []) {
             $att = $message->attachments[0];
-            $text = $this->formatConverter->renderPostable($message);
 
-            $attachmentData = match ($att->type) {
-                'image' => ['type' => 'image', 'payload' => ['url' => $att->url]],
-                'video' => ['type' => 'video', 'payload' => ['url' => $att->url]],
-                'audio' => ['type' => 'audio', 'payload' => ['url' => $att->url]],
-                default => ['type' => 'file', 'payload' => ['url' => $att->url]],
-            };
+            // Location — no native outgoing support, fallback to maps link in text
+            if ($att->type === 'location') {
+                $locText = "https://www.google.com/maps?q={$att->lat},{$att->lng}";
+                if ($att->name !== null) {
+                    $locText = $att->name."\n".$locText;
+                }
+                if ($att->address !== null) {
+                    $locText .= "\n".$att->address;
+                }
+                $originalText = $this->formatConverter->renderPostable($message);
+                $mergedText = $originalText !== '' ? $originalText."\n\n".$locText : $locText;
+                $message = new PostableMessage(
+                    content: $mergedText,
+                    replyToMessageId: $message->replyToMessageId,
+                );
+            } else {
+                $text = $this->formatConverter->renderPostable($message);
 
-            $response = $this->graphApiCall('me/messages', [
-                ...$basePayload,
-                'message' => [
-                    'attachment' => $attachmentData,
-                ],
-            ]);
+                $attachmentData = match ($att->type) {
+                    'image' => ['type' => 'image', 'payload' => ['url' => $att->url]],
+                    'video' => ['type' => 'video', 'payload' => ['url' => $att->url]],
+                    'audio' => ['type' => 'audio', 'payload' => ['url' => $att->url]],
+                    default => ['type' => 'file', 'payload' => ['url' => $att->url]],
+                };
 
-            $additionalMessages = [];
-
-            // Append text as a follow-up if present
-            if ($text !== '') {
-                $textResponse = $this->graphApiCall('me/messages', [
+                $response = $this->graphApiCall('me/messages', [
                     ...$basePayload,
-                    'message' => ['text' => $this->truncate($text)],
+                    'message' => [
+                        'attachment' => $attachmentData,
+                    ],
                 ]);
 
-                $additionalMessages[] = new SentMessage(
-                    id: $textResponse['message_id'] ?? '',
+                $additionalMessages = [];
+
+                if ($text !== '') {
+                    $textResponse = $this->graphApiCall('me/messages', [
+                        ...$basePayload,
+                        'message' => ['text' => $this->truncate($text)],
+                    ]);
+
+                    $additionalMessages[] = new SentMessage(
+                        id: $textResponse['message_id'] ?? '',
+                        threadId: $threadId,
+                        timestamp: (string) time(),
+                        raw: $textResponse,
+                    );
+                }
+
+                return new SentMessage(
+                    id: $response['message_id'] ?? '',
                     threadId: $threadId,
                     timestamp: (string) time(),
-                    raw: $textResponse,
+                    additionalMessages: $additionalMessages,
+                    raw: $response,
                 );
             }
-
-            return new SentMessage(
-                id: $response['message_id'] ?? '',
-                threadId: $threadId,
-                timestamp: (string) time(),
-                additionalMessages: $additionalMessages,
-                raw: $response,
-            );
         }
 
         if ($message->isTemplate()) {
@@ -780,11 +797,22 @@ class MessengerAdapter implements Adapter, HandlesActions, HandlesBatchedWebhook
 
             $type = match ($rawType) {
                 'image', 'video', 'audio', 'file', 'fallback' => $rawType,
-                'reel', 'ig_reel', 'post', 'ig_post', 'appointment_booking', 'template' => $rawType,
+                'reel', 'ig_reel', 'post', 'ig_post', 'appointment_booking', 'template', 'location', 'share' => $rawType,
                 default => 'file',
             };
 
             $payload = $att['payload'] ?? [];
+
+            // Location attachments use structured coordinates, not URL+metadata
+            if ($rawType === 'location') {
+                $coords = $payload['coordinates'] ?? [];
+                $attachments[] = Attachment::location(
+                    lat: (float) ($coords['lat'] ?? 0),
+                    lng: (float) ($coords['long'] ?? 0),
+                );
+
+                continue;
+            }
 
             $metadata = match ($rawType) {
                 'fallback', 'reel', 'ig_reel', 'post', 'ig_post' => array_filter([

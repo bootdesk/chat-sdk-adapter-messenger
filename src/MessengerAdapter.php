@@ -35,6 +35,8 @@ use Nyholm\Psr7\Factory\Psr17Factory;
 use Psr\Http\Client\ClientInterface;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
+use Psr\Log\LoggerInterface;
+use Psr\Log\NullLogger;
 
 class MessengerAdapter implements Adapter, HandlesActions, HandlesBatchedWebhooks, HandlesReactions, HandlesSlashCommands, HandlesStatuses, HasAuthorInfo, RequiresAsyncResponse
 {
@@ -48,6 +50,8 @@ class MessengerAdapter implements Adapter, HandlesActions, HandlesBatchedWebhook
 
     protected EmojiResolver $emojiResolver;
 
+    protected readonly ?LoggerInterface $logger;
+
     public function __construct(
         protected readonly string $pageAccessToken,
         protected readonly ClientInterface $httpClient,
@@ -58,7 +62,9 @@ class MessengerAdapter implements Adapter, HandlesActions, HandlesBatchedWebhook
         protected readonly ?Psr17Factory $psrFactory = null,
         ?FileUploadConverter $fileUploadConverter = null,
         ?EmojiResolver $emojiResolver = null,
+        ?LoggerInterface $logger = null,
     ) {
+        $this->logger = $logger ?? new NullLogger;
         $this->formatConverter = new MessengerFormatConverter;
         $this->webhookVerifier = new MessengerWebhookVerifier($appSecret, $verifyToken, $psrFactory);
         $this->fileUploadConverter = $fileUploadConverter ?? new NullFileUploadConverter;
@@ -278,6 +284,7 @@ class MessengerAdapter implements Adapter, HandlesActions, HandlesBatchedWebhook
         $payload = json_decode($body, true);
 
         if ($payload === null || ($payload['object'] ?? '') !== 'page') {
+            $this->logger->error('Invalid Messenger webhook payload', ['body' => $body]);
             throw new AdapterException('Invalid Messenger webhook payload');
         }
 
@@ -295,6 +302,12 @@ class MessengerAdapter implements Adapter, HandlesActions, HandlesBatchedWebhook
                 $mid = $message['mid'] ?? uniqid('msg_');
 
                 $threadId = $this->encodeThreadId(['recipientId' => $senderId]);
+
+                $this->logger->info('Messenger webhook message parsed', [
+                    'senderId' => $senderId,
+                    'text' => mb_substr($text, 0, 100),
+                    'hasAttachments' => isset($message['attachments']) ? 'yes' : 'no',
+                ]);
 
                 return new Message(
                     id: $mid,
@@ -502,6 +515,13 @@ class MessengerAdapter implements Adapter, HandlesActions, HandlesBatchedWebhook
     {
         $decoded = $this->decodeThreadId($threadId);
         $recipientId = $decoded['recipientId'];
+
+        $this->logger->info('Messenger postMessage', [
+            'threadId' => $threadId,
+            'hasFiles' => $message->files !== [] ? 'yes' : 'no',
+            'hasAttachments' => $message->attachments !== [] ? 'yes' : 'no',
+            'text' => mb_substr($message->getTextContent(), 0, 100),
+        ]);
 
         // Convert files to attachments via the registered converter
         if ($message->files !== []) {
@@ -853,6 +873,8 @@ class MessengerAdapter implements Adapter, HandlesActions, HandlesBatchedWebhook
         $proof = hash_hmac('sha256', $this->pageAccessToken, $this->appSecret);
         $url = "{$this->apiUrl}/{$this->apiVersion}/{$endpoint}?access_token={$this->pageAccessToken}&appsecret_proof={$proof}";
 
+        $this->logger->debug('Messenger API call', ['endpoint' => $endpoint, 'method' => $method, 'url' => $url]);
+
         if ($queryParams !== []) {
             $url .= '&'.http_build_query($queryParams);
         }
@@ -876,6 +898,7 @@ class MessengerAdapter implements Adapter, HandlesActions, HandlesBatchedWebhook
         }
 
         if (! is_array($data)) {
+            $this->logger->error('Messenger API invalid JSON response', ['endpoint' => $endpoint, 'body' => $responseBody]);
             throw new AdapterException("Invalid JSON response from Messenger API: {$endpoint}");
         }
 

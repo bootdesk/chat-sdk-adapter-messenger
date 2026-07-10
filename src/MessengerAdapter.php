@@ -307,6 +307,7 @@ class MessengerAdapter implements Adapter, HandlesActions, HandlesBatchedWebhook
                     'senderId' => $senderId,
                     'text' => mb_substr($text, 0, 100),
                     'hasAttachments' => isset($message['attachments']) ? 'yes' : 'no',
+                    'body' => mb_substr($body, 0, 500),
                 ]);
 
                 return new Message(
